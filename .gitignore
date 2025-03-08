@@ -1,0 +1,13 @@
+.terraform/*
+*.tfstate
+*.tfstate.*
+
+
+
+
+
+
+
+
+
+
