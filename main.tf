@@ -20,7 +20,7 @@ provider "aws" {
 
 #VPC Creation
 resource "aws_vpc" "myVPC" {
-  cidr_block       = "10.0.0.0/16"
+  cidr_block       = var.vpc_cidr_block
   instance_tenancy = "default"
 
   tags = {
@@ -28,114 +28,133 @@ resource "aws_vpc" "myVPC" {
   }
 }
 
-#Subnet creation
+# #Subnet creation
 
-resource "aws_subnet" "subnet1" {
+# resource "aws_subnet" "subnet1" {
+#   vpc_id            = aws_vpc.myVPC.id
+#   cidr_block        = "10.0.1.0/24"
+#   availability_zone = "eu-west-2a"
+
+#   tags = {
+#     Name = "subnet1"
+#   }
+# }
+
+# #IGW
+
+# resource "aws_internet_gateway" "igw" {
+#   vpc_id = aws_vpc.myVPC.id
+
+#   tags = {
+#     Name = "IGW"
+#   }
+# }
+
+# #Route Table Creation
+
+# resource "aws_route_table" "RT1" {
+#   vpc_id = aws_vpc.myVPC.id
+
+#   route {
+#     cidr_block = "0.0.0.0/0"
+#     gateway_id = aws_internet_gateway.igw.id
+#   }
+
+#   tags = {
+#     Name = "RT1"
+#   }
+# }
+
+# #Route Table association with Subnet1
+
+# resource "aws_route_table_association" "a" {
+#   subnet_id      = aws_subnet.subnet1.id
+#   route_table_id = aws_route_table.RT1.id
+# }
+
+
+module "subnet" {
+  source            = "./modules/subnet"
   vpc_id            = aws_vpc.myVPC.id
-  cidr_block        = "10.0.1.0/24"
-  availability_zone = "eu-west-2a"
-
-  tags = {
-    Name = "subnet1"
-  }
+  subnet_cidr_block = var.subnet_cidr_block
+  az                = var.az
+  env               = var.env
+  instance_type     = var.instance_type
 }
 
-#IGW
-
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.myVPC.id
-
-  tags = {
-    Name = "IGW"
-  }
+module "webserver" {
+  source            = "./modules/webserver"
+  vpc_id            = aws_vpc.myVPC.id
+  subnet_id         = module.subnet.subnet.id
+  az                = var.az
+  env               = var.env
+  instance_type     = var.instance_type
+  subnet_cidr_block = var.subnet_cidr_block
 }
 
-#Route Table Creation
+# #Security Group creation
 
-resource "aws_route_table" "RT1" {
-  vpc_id = aws_vpc.myVPC.id
+# resource "aws_security_group" "mySG" {
+#   name        = "allow_tls"
+#   description = "Allow TLS inbound traffic and all outbound traffic"
+#   vpc_id      = aws_vpc.myVPC.id
 
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
-  }
+#   ingress {
+#     description = "SSH"
+#     from_port   = 22
+#     to_port     = 22
+#     protocol    = "tcp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#   ingress {
+#     description = "HTTP"
+#     from_port   = 8080
+#     to_port     = 8080
+#     protocol    = "tcp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#   egress {
+#     from_port        = 0
+#     to_port          = 0
+#     protocol         = "-1"
+#     cidr_blocks      = ["0.0.0.0/0"]
+#     ipv6_cidr_blocks = ["::/0"]
+#   }
 
-  tags = {
-    Name = "RT1"
-  }
-}
+#   tags = {
+#     Name = "mySG"
+#   }
+# }
 
-#Route Table association with Subnet1
+# # Data source block
 
-resource "aws_route_table_association" "a" {
-  subnet_id      = aws_subnet.subnet1.id
-  route_table_id = aws_route_table.RT1.id
-}
+# data "aws_ami" "myAMI" {
+#   most_recent = true
+#   owners      = ["amazon"]
 
+#   filter {
+#     name   = "name"
+#     values = ["amzn2-ami-kernel-*-x86_64-gp2"]
+#   }
 
-#Security Group creation
+#   filter {
+#     name   = "virtualization-type"
+#     values = ["hvm"]
+#   }
+# }
 
-resource "aws_security_group" "mySG" {
-  name        = "allow_tls"
-  description = "Allow TLS inbound traffic and all outbound traffic"
-  vpc_id      = aws_vpc.myVPC.id
+# #EC2 instance creation
 
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  ingress {
-    description = "HTTP"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  egress {
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
+# resource "aws_instance" "web-server" {
+#   ami                         = data.aws_ami.myAMI.id
+#   instance_type               = var.instance_type
+#   subnet_id                   = aws_subnet.subnet1.id
+#   associate_public_ip_address = true
+#   vpc_security_group_ids      = [aws_security_group.mySG.id]
+#   key_name                    = "london1"
+#   user_data                   = file("server-script.sh")
 
-  tags = {
-    Name = "mySG"
-  }
-}
-
-# Data source block
-
-data "aws_ami" "myAMI" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-kernel-*-x86_64-gp2"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
-#EC2 instance creation
-
-resource "aws_instance" "web-server" {
-  ami                         = data.aws_ami.myAMI.id
-  instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.subnet1.id
-  associate_public_ip_address = true
-  vpc_security_group_ids      = [aws_security_group.mySG.id]
-  key_name                    = "london1"
-  user_data                   = file("server-script.sh")
-
-  tags = {
-    Name = "web-server"
-  }
-}
+#   tags = {
+#     Name = "web-server"
+#   }
+# }
